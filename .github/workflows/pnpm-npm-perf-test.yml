@@ -23,17 +23,20 @@ jobs:
         with:
           node-version: "20.x"
           cache: "pnpm" # pnpm 글로벌 스토어 캐싱 설정
+          # cache-dependency-path: pnpm-lock.yaml # 선택 사항: lock 파일 변경 시 캐시 무효화
 
-      # 이전에 있던 'Enable Corepack and Install latest PNPM' 스텝은 제거하거나 내용을 수정합니다.
-      # corepack enable은 setup-node v4에서 이미 처리될 수 있습니다.
-      # 핵심은 pnpm prepare --activate를 install 전에 실행하는 것입니다.
+      # NEW STEP: Install pnpm globally AFTER setup-node
+      # 이렇게 하면 setup-node가 캐시 복원 등을 마친 후 pnpm 명령을 사용할 수 있게 됩니다.
+      - name: Install PNPM globally
+        run: npm install -g pnpm
+        # 또는 corepack enable && corepack prepare pnpm@latest --activate
+        # 하지만 npm install -g pnpm 방식이 때로는 setup-node와 더 잘 통합될 수 있습니다.
 
       - name: PNPM Install - Run 1 (Simulate Cold Cache for node_modules)
         run: |
           echo "--- Running pnpm install (Run 1 - Cold node_modules) ---"
           rm -rf node_modules pnpm-lock.yaml package-lock.json
-          # Make pnpm available in THIS shell session
-          corepack prepare pnpm@latest --activate
+          # 이제 pnpm은 위 스텝에서 전역 설치되었으므로 corepack prepare는 필요 없을 수 있습니다.
           time pnpm install
           echo "--- Disk usage after PNPM Install Run 1 ---"
           du -sh node_modules
@@ -44,8 +47,7 @@ jobs:
         run: |
           echo "--- Running pnpm install (Run 2 - Warm pnpm store) ---"
           rm -rf node_modules
-          # Make pnpm available in THIS shell session
-          corepack prepare pnpm@latest --activate
+          # corepack prepare 필요 없음
           time pnpm install
           echo "--- Disk usage after PNPM Install Run 2 ---"
           du -sh node_modules
@@ -56,19 +58,19 @@ jobs:
         run: |
           echo "--- Running pnpm install (Run 3 - Warm pnpm store) ---"
           rm -rf node_modules
-          # Make pnpm available in THIS shell session
-          corepack prepare pnpm@latest --activate
+          # corepack prepare 필요 없음
           time pnpm install
           echo "--- Disk usage after PNPM Install Run 3 ---"
           du -sh node_modules
           echo "--- Total disk space after PNPM Install Run 3 ---"
           df -h .
 
-      # --- NPM Installation Tests --- (이 부분은 동일)
-      - name: Setup Node.js (for NPM test)
+      # --- NPM Installation Tests --- (이 부분은 변경 없음)
+      - name: Setup Node.js (for NPM test - separate step is good practice)
         uses: actions/setup-node@v4
         with:
           node-version: "20.x"
+          # NPM 테스트 Job을 분리했다면 여기에 cache: 'npm' 설정 가능
 
       - name: NPM Install - Run 1 (Simulate Cold Cache)
         run: |

@@ -1,0 +1,103 @@
+name: PNPM vs NPM Install Performance Test (Blank Project)
+
+on:
+  push:
+    branches:
+      - main # 테스트할 브랜치명
+  workflow_dispatch: # GitHub Actions 탭에서 수동 실행 가능
+
+jobs:
+  test-install-performance:
+    runs-on: ubuntu-latest # GitHub 무료 티어 사용 가능한 러너
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Show initial disk space
+        run: df -h . # 워크플로우 시작 전 디스크 공간 확인 (선택 사항)
+
+      # --- PNPM Installation Tests ---
+      - name: Setup Node.js and PNPM Cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x" # 사용할 Node.js 버전
+          cache: "pnpm" # pnpm 글로벌 스토어 캐싱 설정
+
+      - name: Enable Corepack and Install latest PNPM
+        run: corepack enable && corepack prepare pnpm@latest --activate
+
+      - name: PNPM Install - Run 1 (Simulate Cold Cache for node_modules)
+        run: |
+          echo "--- Running pnpm install (Run 1 - Cold node_modules) ---"
+          # Ensure no previous lock file or node_modules interferes
+          rm -rf node_modules pnpm-lock.yaml package-lock.json # Both lock files removed
+          time pnpm install
+          echo "--- Disk usage after PNPM Install Run 1 ---"
+          du -sh node_modules # Measure disk usage of the local node_modules folder
+          echo "--- Total disk space after PNPM Install Run 1 ---"
+          df -h . # Total disk space used after install
+
+      - name: PNPM Install - Run 2 (Simulate Warm Cache for PNPM store)
+        run: |
+          echo "--- Running pnpm install (Run 2 - Warm pnpm store) ---"
+          # Remove local node_modules only, pnpm store is cached by Actions
+          rm -rf node_modules
+          time pnpm install
+          echo "--- Disk usage after PNPM Install Run 2 ---"
+          du -sh node_modules
+          echo "--- Total disk space after PNPM Install Run 2 ---"
+          df -h .
+
+      - name: PNPM Install - Run 3 (Simulate Warm Cache for PNPM store)
+        run: |
+          echo "--- Running pnpm install (Run 3 - Warm pnpm store) ---"
+          rm -rf node_modules
+          time pnpm install
+          echo "--- Disk usage after PNPM Install Run 3 ---"
+          du -sh node_modules
+          echo "--- Total disk space after PNPM Install Run 3 ---"
+          df -h .
+
+      # --- NPM Installation Tests ---
+      # NPM 테스트는 별도의 Job으로 분리하는 것이 더 정확할 수 있으나,
+      # 단순 비교를 위해 동일 Job 내에서 node_modules와 lock 파일을 제거하며 진행합니다.
+      # setup-node 캐시 설정 없이 NPM 기본 동작을 테스트합니다.
+      # setup-node 캐시를 사용하려면 별도 Job에서 cache: 'npm'을 설정하세요.
+      - name: Setup Node.js (for NPM test)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: NPM Install - Run 1 (Simulate Cold Cache)
+        run: |
+          echo "--- Running npm install (Run 1 - Cold cache simulation) ---"
+          rm -rf node_modules package-lock.json pnpm-lock.yaml # Ensure clean state
+          time npm install
+          echo "--- Disk usage after NPM Install Run 1 ---"
+          du -sh node_modules
+          echo "--- Total disk space after NPM Install Run 1 ---"
+          df -h .
+
+      - name: NPM Install - Run 2
+        run: |
+          echo "--- Running npm install (Run 2 - NPM default cache) ---"
+          rm -rf node_modules # Remove local node_modules
+          time npm install
+          echo "--- Disk usage after NPM Install Run 2 ---"
+          du -sh node_modules
+          echo "--- Total disk space after NPM Install Run 2 ---"
+          df -h .
+
+      - name: NPM Install - Run 3
+        run: |
+          echo "--- Running npm install (Run 3 - NPM default cache) ---"
+          rm -rf node_modules
+          time npm install
+          echo "--- Disk usage after NPM Install Run 3 ---"
+          du -sh node_modules
+          echo "--- Total disk space after NPM Install Run 3 ---"
+          df -h .
+
+      - name: Show final disk space
+        run: df -h . # 워크플로우 종료 후 디스크 공간 확인 (선택 사항)
